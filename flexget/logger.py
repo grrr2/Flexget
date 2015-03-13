@@ -200,7 +200,7 @@ def start(filename=None, level=logging.INFO, to_console=True, to_file=True):
 
     formatter = FlexGetFormatter()
     if to_file:
-        file_handler = logging.handlers.RotatingFileHandler(filename, maxBytes=1000 * 1024, backupCount=9)
+        file_handler = logging.handlers.WatchedFileHandler(filename, encoding='utf-8')
         file_handler.setFormatter(formatter)
         file_handler.setLevel(level)
         logger.addHandler(file_handler)

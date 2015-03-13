@@ -13,6 +13,7 @@ from flexget.utils.soup import get_soup
 log = logging.getLogger('eztv')
 
 EZTV_MIRRORS = [
+    ('http', 'eztv.it'),
     ('http', 'eztv.ch'),
     ('https', 'eztv-proxy.net'),
     ('http', 'eztv.come.in')]
@@ -22,7 +23,13 @@ class UrlRewriteEztv(object):
     """Eztv url rewriter."""
 
     def url_rewritable(self, task, entry):
-        return urlparse(entry['url']).netloc == 'eztv.ch'
+	ret = False
+	s, n, _, _, _, _ = urlparse(entry['url'])
+	for (scheme, netloc) in EZTV_MIRRORS:
+	    if s == scheme and n == netloc:
+		ret = True
+		break
+	return ret
 
     def url_rewrite(self, task, entry):
         url = entry['url']
