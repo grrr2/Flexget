@@ -60,6 +60,7 @@ class TransmissionBase(object):
         config.setdefault('enabled', True)
         config.setdefault('host', 'localhost')
         config.setdefault('port', 9091)
+        config.setdefault('main_file_ratio', 0.9)
         if 'netrc' in config:
             netrc_path = os.path.expanduser(config['netrc'])
             try:
@@ -93,7 +94,7 @@ class TransmissionBase(object):
                 raise plugin.PluginError("Error connecting to transmission: %s" % e.message)
         return cli
 
-    def torrent_info(self, torrent):
+    def torrent_info(self, torrent, config):
         done = torrent.totalSize > 0
         vloc = None
         best = None
@@ -105,7 +106,7 @@ class TransmissionBase(object):
                     break
                 if not best or tf['size'] > best[1]:
                     best = (tf['name'], tf['size'])
-        if done and best and (100 * float(best[1]) / float(torrent.totalSize)) >= 90:
+        if done and best and (100 * float(best[1]) / float(torrent.totalSize)) >= (config['main_file_ratio'] * 100):
             vloc = ('%s/%s' % (torrent.downloadDir, best[0])).replace('/', os.sep)
         return done, vloc
 
@@ -186,7 +187,7 @@ class PluginTransmissionInput(TransmissionBase):
         session = self.client.get_session()
 
         for torrent in self.client.get_torrents():
-            downloaded, bigfella = self.torrent_info(torrent)
+            downloaded, bigfella = self.torrent_info(torrent, config)
             seed_ratio_ok, idle_limit_ok = self.check_seed_limits(torrent, session)
             if not config['onlycomplete'] or (downloaded and torrent.status == 'stopped' and
                                               (seed_ratio_ok is None and idle_limit_ok is None) or
@@ -244,6 +245,7 @@ class PluginTransmission(TransmissionBase):
                     'addpaused': {'type': 'boolean'},
                     'content_filename': {'type': 'string'},
                     'main_file_only': {'type': 'boolean'},
+                    'main_file_ratio': {'type': 'number'},
                     'enabled': {'type': 'boolean'},
                     'include_subs': {'type': 'boolean'},
                     'bandwidthpriority': {'type': 'number'},
@@ -261,6 +263,7 @@ class PluginTransmission(TransmissionBase):
         config = TransmissionBase.prepare_config(self, config)
         config.setdefault('path', '')
         config.setdefault('main_file_only', False)
+        config.setdefault('main_file_ratio', 0.90)
         config.setdefault('include_subs', False)
         config.setdefault('rename_like_files', False)
         config.setdefault('include_files', [])
@@ -308,7 +311,7 @@ class PluginTransmission(TransmissionBase):
         opt_dic = {}
 
         for opt_key in ('path', 'addpaused', 'honourlimits', 'bandwidthpriority',
-                        'maxconnections', 'maxupspeed', 'maxdownspeed', 'ratio', 'main_file_only',
+                        'maxconnections', 'maxupspeed', 'maxdownspeed', 'ratio', 'main_file_only', 'main_file_ratio',
                         'include_subs', 'content_filename', 'include_files', 'skip_files', 'rename_like_files'):
             # Values do not merge config with task
             # Task takes priority then config is used
@@ -360,6 +363,8 @@ class PluginTransmission(TransmissionBase):
             post['paused'] = opt_dic['addpaused']
         if 'main_file_only' in opt_dic:
             post['main_file_only'] = opt_dic['main_file_only']
+        if 'main_file_ratio' in opt_dic:
+            post['main_file_ratio'] = opt_dic['main_file_ratio']
         if 'include_subs' in opt_dic:
             post['include_subs'] = opt_dic['include_subs']
         if 'content_filename' in opt_dic:
@@ -443,6 +448,10 @@ class PluginTransmission(TransmissionBase):
                         main_list = []
                         full_list = []
                         ext_list = ['*.srt', '*.sub', '*.idx', '*.ssa', '*.ass']
+                        
+                        main_ratio = config['main_file_ratio']
+                        if 'main_file_ratio' in options['post']:
+                            main_ratio = options['post']['main_file_ratio']
                                               
                         if 'include_files' in options['post']:                
                             include_files = True
@@ -450,7 +459,7 @@ class PluginTransmission(TransmissionBase):
 
                         for f in fl[r.id]:
                             full_list.append(f)
-                            if fl[r.id][f]['size'] > total_size * 0.90:
+                            if fl[r.id][f]['size'] > total_size * main_ratio:
                                 main_id = f
 
                             if 'include_files' in options['post']:
@@ -478,6 +487,8 @@ class PluginTransmission(TransmissionBase):
          
                             if main_id not in dl_list:
                                 dl_list.append(main_id)
+                        else:
+                            log.warning('No files in "%s" are > %d%% of content size, no files renamed.' % (entry['title'], main_ratio * 100))
 
                         # If we have a main file and want to rename it and associated files
                         if 'content_filename' in options['post'] and main_id is not None:
@@ -621,7 +632,7 @@ class PluginTransmissionClean(TransmissionBase):
         for torrent in self.client.get_torrents():
             log.verbose('Torrent "%s": status: "%s" - ratio: %s -  date added: %s - date done: %s' %
                         (torrent.name, torrent.status, torrent.ratio, torrent.date_added, torrent.date_done))
-            downloaded, dummy = self.torrent_info(torrent)
+            downloaded, dummy = self.torrent_info(torrent, config)
             seed_ratio_ok, idle_limit_ok = self.check_seed_limits(torrent, session)
             is_clean_all= nrat is None and nfor is None and trans_checks is None
             is_minratio_reached= nrat and (nrat <= torrent.ratio)
