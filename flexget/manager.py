@@ -32,7 +32,7 @@ from flexget.ipc import IPCClient, IPCServer
 from flexget.options import CoreArgumentParser, get_parser, manager_parser, ParserError, unicode_argv
 from flexget.task import Task
 from flexget.task_queue import TaskQueue
-from flexget.utils.tools import pid_exists
+from flexget.utils.tools import pid_exists, console
 
 
 log = logging.getLogger('manager')
@@ -282,8 +282,9 @@ class Manager(object):
         # If another process is started, send the execution to the running process
         ipc_info = self.check_ipc_info()
         if ipc_info:
+            console('There is a FlexGet process already running for this config, sending execution there.')
+            log.debug('Sending command to running FlexGet process: %s' % self.args)
             try:
-                log.info('There is a FlexGet process already running for this config, sending execution there.')
                 client = IPCClient(ipc_info['port'], ipc_info['password'])
             except ValueError as e:
                 log.error(e)
@@ -384,6 +385,9 @@ class Manager(object):
         if options.action == 'start':
             if self.is_daemon:
                 log.error('Daemon already running for this config.')
+                return
+            elif self.task_queue.is_alive():
+                log.error('Non-daemon execution of FlexGet is running. Cannot start daemon until it is finished.')
                 return
             if options.daemonize:
                 self.daemonize()
@@ -539,7 +543,6 @@ class Manager(object):
         self.lockfile = os.path.join(self.config_base, '.%s-lock' % self.config_name)
         self.db_filename = os.path.join(self.config_base, 'db-%s.sqlite' % self.config_name)
 
-
     def load_config(self):
         """
         Loads the config file from disk, validates and activates it.
@@ -567,7 +570,7 @@ class Manager(object):
             print(' o Indentation error')
             print(' o Missing : from end of the line')
             print(' o Non ASCII characters (use UTF8)')
-            print(' o If text contains any of :[]{}% characters it must be single-quoted ' \
+            print(' o If text contains any of :[]{}% characters it must be single-quoted '
                   '(eg. value{1} should be \'value{1}\')\n')
 
             # Not very good practice but we get several kind of exceptions here, I'm not even sure all of them
@@ -890,7 +893,7 @@ class Manager(object):
         self.engine.dispose()
         # remove temporary database used in test mode
         if self.options.test:
-            if not 'test' in self.db_filename:
+            if 'test' not in self.db_filename:
                 raise Exception('trying to delete non test database?')
             if self._has_lock:
                 os.remove(self.db_filename)

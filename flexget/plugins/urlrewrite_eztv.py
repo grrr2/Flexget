@@ -63,7 +63,6 @@ class UrlRewriteEztv(object):
         entry['url'] = mirrors[0].get('href')
 
 
-
 @event('plugin.register')
 def register_plugin():
     plugin.register(UrlRewriteEztv, 'eztv', groups=['urlrewriter'], api_ver=2)
