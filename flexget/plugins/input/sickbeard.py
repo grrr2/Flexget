@@ -15,10 +15,9 @@ class Sickbeard(object):
         'type': 'object',
         'properties': {
             'base_url': {'type': 'string'},
-            'port': {'type': 'number'},
             'api_key': {'type': 'string'}
         },
-        'required': ['api_key', 'base_url', 'port'],
+        'required': ['api_key', 'base_url'],
         'additionalProperties': False
     }
 
@@ -29,8 +28,7 @@ class Sickbeard(object):
         Syntax:
 
         sickbeard:
-          base_url=<value>
-          port=<value>
+          base_url=<value> -- as configured in sickbeard
           api_key=<value>
 
         Use with input plugin like discover and/or configure_series.
@@ -43,8 +41,7 @@ class Sickbeard(object):
                 - 720p
             from:
               sickbeard:
-                base_url: http://localhost
-                port: 8531
+                base_url: http://localhost:8531/sickbeard
                 api_key: MYAPIKEY1123
           discover:
             what:
@@ -59,7 +56,7 @@ class Sickbeard(object):
         remove it in flexget as well,which could be positive or negative,
         depending on your usage.
         '''
-        url = '%s:%s/api/%s/?cmd=shows' % (config['base_url'], config['port'], config['api_key'])
+        url = '%s/api/%s/?cmd=shows' % (config['base_url'], config['api_key'])
         json = task.requests.get(url).json()
         entries = []
         for id, show in json['data'].items():
