@@ -61,9 +61,15 @@ class Sickbeard(object):
         you are basically synced to it, so removing a show in Sickbeard will
         remove it in flexget as well, which could be positive or negative,
         depending on your usage.
-        '''
-        url = '%s/api/%s/?cmd=shows' % (config['base_url'], config['api_key'])
-        json = task.requests.get(url).json()
+        """
+        parsedurl = urlparse(config.get('base_url'))
+        url = '%s://%s:%s%s/api/%s/?cmd=shows' % (parsedurl.scheme, parsedurl.netloc,
+                                                  config.get('port'), parsedurl.path, config.get('api_key'))
+        try:
+            json = task.requests.get(url).json()
+        except RequestException as e:
+            raise plugin.PluginError('Unable to connect to Sickbeard at %s://%s:%s%s. Error: %s'
+                                     % (parsedurl.scheme, parsedurl.netloc, config.get('port'), parsedurl.path, e))
         entries = []
         # Dictionary based on SB quality list.
         qualities = {'Any': '',
@@ -73,27 +79,29 @@ class Sickbeard(object):
                      'SD': '<hr'}
         for id, show in json['data'].items():
             fg_quality = ''  # Initializes the quality parameter
-            if not show['paused'] or not config.get('only_monitored'):
-                if config.get('include_ended') or show['status'] != 'Ended':
-                    if config.get('include_data'):
-                        show_url = '%s:%s/api/%s/?cmd=show&tvdbid=%s' % (config['base_url'], config['port'],
-                                                                         config['api_key'], show['tvdbid'])
-                        show_json = task.requests.get(show_url).json()
-                        sb_quality = show_json['data']['quality']
-                        fg_quality = qualities[sb_quality]
-                    entry = Entry(title=show['show_name'],
-                                  url='',
-                                  series_name=show['show_name'],
-                                  tvdb_id=show['tvdbid'],
-                                  tvrage_id=show['tvrage_id'],
-                                  # configure_series plugin requires that all settings will have the configure_series prefix
-                                  configure_series_quality=fg_quality)
+            if show['paused'] and config.get('only_monitored'):
+                continue
+            if show['status'] == 'Ended' and not config.get('include_ended'):
+                continue
+            if config.get('include_data'):
+                show_url = '%s:%s/api/%s/?cmd=show&tvdbid=%s' % (config['base_url'], config['port'],
+                                                                 config['api_key'], show['tvdbid'])
+                show_json = task.requests.get(show_url).json()
+                sb_quality = show_json['data']['quality']
+                fg_quality = qualities[sb_quality]
+            entry = Entry(title=show['show_name'],
+                          url='',
+                          series_name=show['show_name'],
+                          tvdb_id=show.get('tvdbid'),
+                          tvrage_id=show.get('tvrage_id'),
+                          # configure_series plugin requires that all settings will have the configure_series prefix
+                          configure_series_quality=fg_quality)
             if entry.isvalid():
                 entries.append(entry)
             else:
                 log.error('Invalid entry created? %s' % entry)
             # Test mode logging
-            if task.options.test: 
+            if task.options.test:
                 log.info("Test mode. Entry includes:")
                 log.info("    Title: %s" % entry["title"])
                 log.info("    URL: %s" % entry["url"])
@@ -101,7 +109,6 @@ class Sickbeard(object):
                 log.info("    TVDB ID: %s" % entry["tvdb_id"])
                 log.info("    TVRAGE ID: %s" % entry["tvrage_id"])
                 log.info("    Quality: %s" % entry["configure_series_quality"])
-                continue
         return entries
 
 

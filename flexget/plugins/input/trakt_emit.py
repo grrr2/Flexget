@@ -59,7 +59,7 @@ class TraktEmit(object):
                 log.warning('The list "%s" is empty.' % config['list'])
                 return
             for item in data:
-                if item['show'] is not None:
+                if item.get('show'):
                     if not item['show']['title']:
                         # Seems we can get entries with a blank show title sometimes
                         log.warning('Found trakt list show with no series name.')
@@ -102,11 +102,11 @@ class TraktEmit(object):
                                 epn += 1
                         break
                 else:
-                  if config['position'] == 'next':
-                    eps = epn = 1
-                  else:
-                    # There were no watched/collected episodes, nothing to emit in 'last' mode
-                    continue
+                    if config['position'] == 'next':
+                        eps = epn = 1
+                    else:
+                        # There were no watched/collected episodes, nothing to emit in 'last' mode
+                        continue
             if eps and epn:
                 entry = self.make_entry(fields, eps, epn)
                 entries.append(entry)
